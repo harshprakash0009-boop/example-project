@@ -53,8 +53,8 @@ def main():
     log.warn('etl_job is up-and-running')
 
     # execute ETL pipeline
-    data = extract_data(spark)
-    data_transformed = transform_data(data, config['steps_per_floor'])
+    data, data2 = extract_data(spark)
+    data_transformed = transform_data(data, data2, config['steps_per_floor'])
     load_data(data_transformed)
 
     # log the success and terminate Spark application
@@ -69,31 +69,30 @@ def extract_data(spark):
     :param spark: Spark session object.
     :return: Spark DataFrame.
     """
-    df = (
-        spark
-        .read
-        .parquet('tests/test_data/employees'))
-
-    return df
+    df = spark.read.parquet('tests/test_data/employees')
+    df2 = spark.read.parquet('tests/test_data/addresses')
+    return df,df2
 
 
-def transform_data(df, steps_per_floor_):
+def transform_data(df, df2, steps_per_floor_):
     """Transform original dataset.
 
     :param df: Input DataFrame.
+    :param df2: Address DataFrame.
     :param steps_per_floor_: The number of steps per-floor at 43 Tanner
         Street.
     :return: Transformed DataFrame.
     """
     df_transformed = (
         df
+        .join(df2, "id" , "left")
         .select(
             col('id'),
             concat_ws(
                 ' ',
                 col('first_name'),
                 col('second_name')).alias('name'),
-               (col('floor') * lit(steps_per_floor_)).alias('steps_to_desk')))
+               (col('floor') * lit(steps_per_floor_)).alias('steps_to_desk'),col("address")))
 
     return df_transformed
 
@@ -133,14 +132,31 @@ def create_test_data(spark, config):
 
     df = spark.createDataFrame(local_records)
 
+    local_records2 = [
+        Row(id=1, address= "Gurgaon"),
+        Row(id=2, address= "Delhi"),
+        Row(id=3, address= "Patna"),
+        Row(id=4, address= "Bangalore"),
+        Row(id=5, address= "Mumbai"),
+        Row(id=6, address= "Pune"),
+        Row(id=7, address= "Hyderabad"),
+        Row(id=8, address= "Muzaffarpur")
+    ]
+
+    df2 = spark.createDataFrame(local_records2)
+
     # write to Parquet file format
     (df
      .coalesce(1)
      .write
      .parquet('tests/test_data/employees', mode='overwrite'))
+    (df2
+    .coalesce(1)
+    .write
+    .parquet('tests/test_data/addresses', mode='overwrite'))
 
     # create transformed version of data
-    df_tf = transform_data(df, config['steps_per_floor'])
+    df_tf = transform_data(df, df2, config['steps_per_floor'])
 
     # write transformed version of data to Parquet
     (df_tf
