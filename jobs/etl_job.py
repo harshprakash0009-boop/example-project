@@ -50,7 +50,7 @@ def main():
         files=['configs/etl_config.json'])
 
     # log that main ETL job is starting
-    log.warn('etl_job is up-and-running')
+    log.warn('etl_job is up-and-running in dashboard git ')
 
     # execute ETL pipeline
     data, data2 = extract_data(spark)
